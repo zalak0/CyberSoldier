@@ -49,9 +49,6 @@ def file_initialise(csv_file):
     le_auth = LabelEncoder() 
     df_merged["access_authentication"] = le_auth.fit_transform(df_merged["access_authentication"])
     
-    le_prod = LabelEncoder()
-    df_merged["vulnerable_product"] = le_prod.fit_transform(df_merged["vulnerable_product"])
-    
     # le_conf = LabelEncoder()
     # df_merged["impact_confidentiality"] = le_conf.fit_transform(df_merged["impact_confidentiality"])
     
@@ -59,7 +56,9 @@ def file_initialise(csv_file):
     df_merged["vendor"] = le_vend.fit_transform(df_merged["vendor"])
 
     #print(df_merged[['cve_id','cwe_code', 'vendor']])
-    Y = df_merged["impact_confidentiality"]
+    #Y = df_merged["impact_confidentiality"]
+    Y = df_merged["impact_availability"]
+    #Y=df_merged["impact_integrity"]
     X = df_merged[["cwe_code", "cvss", "access_complexity", "access_authentication", "vulnerable_product", "vendor"]]
     
     return X, Y, df_merged
@@ -93,7 +92,10 @@ def predict_access_vector(knn_model, df, input_sample, label_encoder=None):
     # Make prediction
     prediction = knn_model.predict(input_array)
     
-    print(f"A vulnerability of {cwe_name} which has a vulnerability score of {input_sample[1]} from a {vendor} vendor, will result in a {prediction[0]} risk on data confidentiality")
+    #print(f"A vulnerability of {cwe_name} which has a vulnerability score of {input_sample[1]} from a {vendor} vendor, will result in a {prediction[0]} risk on data confidentiality")
+    print(f"A vulnerability of {cwe_name} which has a vulnerability score of {input_sample[1]} from a {vendor} vendor, will result in a {prediction[0]} risk to system availability")
+    #print(f"A vulnerability of {cwe_name} which has a vulnerability score of {input_sample[1]} from a {vendor} vendor, will result in a {prediction[0]} risk to data integrity")
+
 
 def knn_classifier(csv_file):
     X, Y, df = file_initialise(csv_file)
