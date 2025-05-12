@@ -1,10 +1,9 @@
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.model_selection import RandomizedSearchCV, GridSearchCV, train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score, classification_report
 from sklearn.preprocessing import LabelEncoder
-from sklearn.base import BaseEstimator
 from scipy.stats import randint
-import warnings
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
@@ -65,7 +64,31 @@ def file_initialise(csv_file : str, target : str) -> tuple[float]:
     return X, Y
 
 def optim_param(rf, X_train, Y_train, X_test, Y_test):
-    # 3. Define hyperparameter search space
+    param_grid = {
+        'n_estimators': [100, 300, 500],
+        'max_depth': [10, 15, 20],
+        'min_samples_leaf': [2, 4],
+        'criterion': ['gini', 'entropy'],
+    }
+
+    grid_search = GridSearchCV(
+        estimator=rf,
+        param_grid=param_grid,
+        cv=5,  # 5-fold cross-validation
+        scoring='accuracy',  # or 'accuracy', 'roc_auc', etc.
+        n_jobs=-1,  # Use all available CPUs
+        verbose=2
+    )
+
+    # 5. Fit the search to the data
+    grid_search.fit(X_train, Y_train)
+
+    # 6. Evaluate
+    best_model = grid_search.best_estimator_
+    Y_pred = best_model.predict(X_test)
+    print("Best Parameters:", grid_search.best_params_)
+    
+def random_optim(rf, X_train, Y_train, X_test, Y_test):
     param_grid = {
         'n_estimators': [100, 200, 500],
         'max_depth': [10, 15, 20, None],
@@ -74,15 +97,14 @@ def optim_param(rf, X_train, Y_train, X_test, Y_test):
         'max_features': ['sqrt', 'log2']
     }
 
-
     # 4. Set up randomized search
     random_search = RandomizedSearchCV(
         estimator=rf,
         param_distributions=param_grid,
-        n_iter=25,                 # Try 50 random combinations
-        cv=3,                      # 5-fold cross-validation
+        n_iter=50,                 # Try 50 random combinations
+        cv=5,                      # 5-fold cross-validation
         scoring='accuracy',       # Use another metric if needed
-        verbose=1,
+        verbose=2,
         random_state=42,
         n_jobs=-1                 # Use all processors
     )
@@ -94,26 +116,63 @@ def optim_param(rf, X_train, Y_train, X_test, Y_test):
     best_model = random_search.best_estimator_
     Y_pred = best_model.predict(X_test)
     print("Best Parameters:", random_search.best_params_)
-    
+    print("Test Accuracy:", accuracy_score(Y_test, Y_pred))
+        
     return Y_pred
 
 def forest_classifier(csv_file, target):
     X, Y = file_initialise(csv_file, target)
-
-    X_train, X_test, Y_train, Y_test = \
-        train_test_split(X, Y, test_size = 0.2)
-
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2)
     forest = RandomForestClassifier()
     forest.fit(X_train, Y_train)
-    
-    return forest, X_train, Y_train, X_test, Y_test
 
-warnings.filterwarnings("ignore")
+    # Predict using default parameters (before optimization)
+    Y_pred_before = forest.predict(X_test)
+    acc_before = accuracy_score(Y_test, Y_pred_before)
+
+    return forest, X_train, Y_train, X_test, Y_test, acc_before
+
+# For plotting
 targets = ["impact_confidentiality", "impact_availability", "impact_integrity"]
-predictions = []
+acc_before_list = []
+acc_after_list = []
+
 for target in targets:
-    forest, X_train, Y_train, X_test, Y_test \
-        = forest_classifier("data/cleaned_cve.csv", target)
-    Y_pred = optim_param(forest, X_train, Y_train, X_test, Y_test)
-    
-    print(f"\nClassification Report for {target}:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
+    forest, X_train, Y_train, X_test, Y_test, acc_before = forest_classifier("data/cleaned_cve.csv", target)
+    Y_pred_after = random_optim(forest, X_train, Y_train, X_test, Y_test)
+    acc_after = accuracy_score(Y_test, Y_pred_after)
+
+    acc_before_list.append(acc_before)
+    acc_after_list.append(acc_after)
+
+    print(f"\nClassification Report for {target}:\n{classification_report(Y_test, Y_pred_after, digits=4, zero_division=0)}")
+    print(f"Accuracy Before Optimization: {acc_before:.4f}")
+    print(f"Accuracy After Optimization:  {acc_after:.4f}")
+
+# Plotting Accuracy Comparison
+x = np.arange(len(targets))
+width = 0.35
+
+fig, ax = plt.subplots()
+bars1 = ax.bar(x - width/2, acc_before_list, width, label='Before Optimization')
+bars2 = ax.bar(x + width/2, acc_after_list, width, label='After Optimization')
+
+ax.set_ylabel('Accuracy')
+ax.set_title('Accuracy Before vs After Hyperparameter Optimization')
+ax.set_xticks(x)
+ax.set_xticklabels(targets)
+ax.set_ylim(0.9, 1)
+ax.legend()
+ax.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+for bar in bars1 + bars2:
+    height = bar.get_height()
+    ax.annotate(f'{height:.3f}',
+                xy=(bar.get_x() + bar.get_width() / 2, height),
+                xytext=(0, 3),  # vertical offset
+                textcoords="offset points",
+                ha='center', va='bottom')
+
+plt.tight_layout()
+plt.show()
+

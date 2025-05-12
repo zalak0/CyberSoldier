@@ -1,14 +1,15 @@
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
-from sklearn.metrics import make_scorer, accuracy_score, roc_auc_score, classification_report
+from sklearn.metrics import accuracy_score, f1_score, classification_report
 from sklearn.preprocessing import LabelEncoder
-from xgboost import XGBClassifier
 import warnings
 import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
 import numpy as np
 
 # def evaluate_model(model, X_test, y_test):
@@ -27,8 +28,8 @@ def file_initialise(csv_file):
     df = pd.read_csv(csv_file)
     df_cleaned = df.dropna()
     
-    df_products = pd.read_csv('cleaned_products.csv')
-    df_vendor_only = pd.read_csv('cleaned_vendors.csv')
+    df_products = pd.read_csv('data/cleaned_products.csv')
+    df_vendor_only = pd.read_csv('data/cleaned_vendors.csv')
 
     df_products = df_products.drop_duplicates(subset='cve_id')
     df_vendor_only = df_vendor_only.drop_duplicates(subset='cve_id')
@@ -106,10 +107,13 @@ def knn_classifier(csv_file):
     knn = KNeighborsClassifier(n_neighbors=5, weights = "distance")
     knn.fit(X_train, Y_train)
     Y_pred = knn.predict(X_test)
+    acc = accuracy_score(Y_test, Y_pred)
+    f1 = f1_score(Y_test, Y_pred, average='weighted')
+
     
     print("\nClassification Report using KNN:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return knn, df
+    return knn, df, acc, f1
 
 
 def mlp_classifier(csv_file):
@@ -124,13 +128,16 @@ def mlp_classifier(csv_file):
     ])
     pipeline.fit(X_train, Y_train)
     Y_pred = pipeline.predict(X_test)  
+    acc = accuracy_score(Y_test, Y_pred)
+    f1 = f1_score(Y_test, Y_pred, average='weighted')
+
     
     print("\nClassification Report using MLP: \n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return pipeline, df
+    return pipeline, df, acc, f1
 
 
-def xg_classifier(csv_file):
+def gboost_classifier(csv_file):
     X, Y, df = file_initialise(csv_file)
 
     X_train, X_test, Y_train, Y_test = \
@@ -139,10 +146,13 @@ def xg_classifier(csv_file):
     xgboost = GradientBoostingClassifier()
     xgboost.fit(X_train, Y_train)
     Y_pred = xgboost.predict(X_test)  
+    acc = accuracy_score(Y_test, Y_pred)
+    f1 = f1_score(Y_test, Y_pred, average='weighted')
+
     
     print("\nClassification Report using Gradient Boost:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return xgboost, df
+    return xgboost, df, acc, f1
 
 def forest_classifier(csv_file):
     X, Y, df = file_initialise(csv_file)
@@ -152,13 +162,16 @@ def forest_classifier(csv_file):
 
     forest = RandomForestClassifier()
     forest.fit(X_train, Y_train)
-    Y_pred = forest.predict(X_test)  
+    Y_pred = forest.predict(X_test)
+    acc = accuracy_score(Y_test, Y_pred)
+    f1 = f1_score(Y_test, Y_pred, average='weighted')
+
 
     #mlp_results = evaluate_model(pipeline, X_test, Y_test)
     
     print("\nClassification Report for Random Forest:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return forest, df
+    return forest, df, acc, f1
 
 
 def ens_classifier(csv_file):
@@ -181,15 +194,51 @@ def ens_classifier(csv_file):
     # Fit and evaluate
     ensemble.fit(X_train, Y_train)
     Y_pred = ensemble.predict(X_test)
+    acc = accuracy_score(Y_test, Y_pred)
+    f1 = f1_score(Y_test, Y_pred, average='weighted')
+
     
     print("\nClassification Report for CWE Code:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return ensemble, df
+    return ensemble, df, acc, f1
 
 warnings.filterwarnings("ignore")
-knn, df = knn_classifier("cleaned_cve.csv")
-mlp, df = mlp_classifier("cleaned_cve.csv")
-xgboost, df = xg_classifier("cleaned_cve.csv")
-forest, df = forest_classifier("cleaned_cve.csv")
-#ensemble, df = ens_classifier("cleaned_cve.csv")
+knn, df, acc_knn, f1_kn = knn_classifier("data/cleaned_cve.csv")
+mlp, df, acc_mlp, f1_mlp = mlp_classifier("data/cleaned_cve.csv")
+gboost, df, acc_gb, f1_gb = gboost_classifier("data/cleaned_cve.csv")
+forest, df, acc_frst, f1_frst = forest_classifier("data/cleaned_cve.csv")
+ensemble, df, acc_ens, f1_ens = ens_classifier("data/cleaned_cve.csv")
 predict_access_vector(forest, df, [79, 5, 1, 1, 1, 4])
+
+# Classifier names
+models = ['KNN', 'MLP', 'GBoost', 'Random Forest', 'Ensemble']
+
+# Accuracy and F1-score values
+accuracy = [acc_knn, acc_mlp, acc_gb, acc_frst, acc_ens]
+f1_score = [f1_kn, f1_mlp, f1_gb, f1_frst, f1_ens]
+
+# Set position of bar on X axis
+x = np.arange(len(models))
+width = 0.35  # Width of the bars
+
+# Plotting
+fig, ax = plt.subplots(figsize=(10, 6))
+bars1 = ax.bar(x - width/2, accuracy, width, label='Accuracy', color='skyblue')
+bars2 = ax.bar(x + width/2, f1_score, width, label='F1 Score', color='salmon')
+
+# Labels and title
+ax.set_ylabel('Score')
+ax.set_title('Classifier Performance: Accuracy vs F1 Score')
+ax.set_xticks(x)
+ax.set_xticklabels(models)
+ax.set_ylim(0.7, 1)
+ax.legend()
+
+# Annotate bars
+for bar in bars1 + bars2:
+    yval = bar.get_height()
+    ax.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f'{yval:.3f}', ha='center', va='bottom')
+
+plt.tight_layout()
+plt.show()
+
