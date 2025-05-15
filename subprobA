@@ -1,0 +1,76 @@
+import pandas as pd
+df = pd.read_csv('cybersecurity_attacks.csv')
+df.head()
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+
+
+# Drop irrelevant or high-cardinality columns
+drop_cols = [
+    'Timestamp', 'Source IP Address', 'Destination IP Address',
+    'Payload Data', 'Attack Signature', 'User Information',
+    'Device Information', 'Geo-location Data', 'Proxy Information',
+    'Firewall Logs', 'IDS/IPS Alerts', 'Log Source'
+]
+
+# Define features and targets
+features = df.drop(columns=drop_cols + ['Anomaly Scores', 'Traffic Type'])
+target_anomaly_type = df['Anomaly Scores']
+target_traffic_type = df['Traffic Type']
+
+# Identify categorical and numeric columns
+categorical_cols = features.select_dtypes(include='object').columns.tolist()
+numeric_cols = features.select_dtypes(include=['int64', 'float64']).columns.tolist()
+
+# Define preprocessing pipeline
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', StandardScaler(), numeric_cols),
+        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_cols)
+    ]
+)
+
+# Encode target variables
+anomaly_type_encoder = LabelEncoder()
+traffic_type_encoder = LabelEncoder()
+
+y_attack = anomaly_type_encoder.fit_transform(target_anomaly_type)
+y_traffic = traffic_type_encoder.fit_transform(target_traffic_type)
+
+# Train/test split
+X_train, X_test, y_attack_train, y_attack_test, y_traffic_train, y_traffic_test = train_test_split(
+    features, y_attack, y_traffic, test_size=0.2, random_state=42
+)
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class MLP(nn.Module):
+    def __init__(self, input_size, hidden_sizes, output_size):
+        super(MLP, self).__init__()
+        layers = []
+
+        # Input to first hidden layer
+        layers.append(nn.Linear(input_size, hidden_sizes[0]))
+        layers.append(nn.ReLU())
+
+        # Hidden layers
+        for i in range(1, len(hidden_sizes)):
+            layers.append(nn.Linear(hidden_sizes[i-1], hidden_sizes[i]))
+            layers.append(nn.ReLU())
+
+        # Final output layer
+        layers.append(nn.Linear(hidden_sizes[-1], output_size))
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+# Example: input_size=10, two hidden layers with 64 and 32 units, output_size=1 (for regression or binary classification)
+mlp = MLP(input_size=10, hidden_sizes=[64, 32], output_size=1)
+
+# Print model
+print(mlp)
