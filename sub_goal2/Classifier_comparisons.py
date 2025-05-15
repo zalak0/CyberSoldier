@@ -10,19 +10,6 @@ import warnings
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import numpy as np
-
-# def evaluate_model(model, X_test, y_test):
-#     y_pred = model.predict(X_test)
-#     y_proba = model.predict_proba(X_test)[:, 1]
-
-#     acc = accuracy_score(y_test, y_pred)
-#     auc = roc_auc_score(y_test, y_proba)
-
-#     tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
-#     specificity = tn / (tn + fp)
-
-#     return acc, auc, specificity
 
 def file_initialise(csv_file): 
     df = pd.read_csv(csv_file)
@@ -124,13 +111,16 @@ def mlp_classifier(csv_file):
 
     pipeline = Pipeline([
     ('scaler', StandardScaler()),
-    ('mlp', MLPClassifier(hidden_layer_sizes=(20,), activation='logistic'))
+    ('mlp', MLPClassifier(hidden_layer_sizes=(100,),
+                    alpha=0.01,     # Increase this to apply stronger regularisation
+                    max_iter=300,
+                    random_state=42)
+)
     ])
     pipeline.fit(X_train, Y_train)
     Y_pred = pipeline.predict(X_test)  
     acc = accuracy_score(Y_test, Y_pred)
     f1 = f1_score(Y_test, Y_pred, average='weighted')
-
     
     print("\nClassification Report using MLP: \n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
@@ -228,7 +218,7 @@ bars2 = ax.bar(x + width/2, f1_score, width, label='F1 Score', color='salmon')
 
 # Labels and title
 ax.set_ylabel('Score')
-ax.set_title('Classifier Performance: Accuracy vs F1 Score')
+ax.set_title('Classifier Accuracy and F1 Score Performance')
 ax.set_xticks(x)
 ax.set_xticklabels(models)
 ax.set_ylim(0.7, 1)
@@ -237,7 +227,7 @@ ax.legend()
 # Annotate bars
 for bar in bars1 + bars2:
     yval = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f'{yval:.3f}', ha='center', va='bottom')
+    ax.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f'{yval:.4f}', ha='center', va='bottom')
 
 plt.tight_layout()
 plt.show()

@@ -7,18 +7,7 @@ from sklearn.model_selection import GridSearchCV
 import warnings
 import pandas as pd
 import numpy as np
-
-# def evaluate_model(model, X_test, y_test):
-#     y_pred = model.predict(X_test)
-#     y_proba = model.predict_proba(X_test)[:, 1]
-
-#     acc = accuracy_score(y_test, y_pred)
-#     auc = roc_auc_score(y_test, y_proba)
-
-#     tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
-#     specificity = tn / (tn + fp)
-
-#     return acc, auc, specificity
+import matplotlib.pyplot as plt
 
 def file_initialise(csv_file : str, target : str) -> tuple[float]:
     """ Opens files and initialises data-frame by encoding categorical features and initialising expected input and output
@@ -149,6 +138,12 @@ def forest_classifier(csv_file, target):
     forest = RandomForestClassifier()
     forest.fit(X_train, Y_train)
     Y_pred = forest.predict(X_test)  
+    
+    importances = pd.Series(forest.feature_importances_, index=X_train.columns)
+    importances.sort_values(ascending=False).plot(kind='barh', figsize=(8, 5))
+    plt.title("Feature Importance (Random Forest)")
+    plt.tight_layout()
+    plt.show()
     
     print(f"\nClassification Report for {target}:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
