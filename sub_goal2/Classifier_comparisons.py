@@ -6,6 +6,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 from sklearn.preprocessing import LabelEncoder
+import seaborn as sns
 import warnings
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -49,6 +50,15 @@ def file_initialise(csv_file):
     #Y=df_merged["impact_integrity"]
     X = df_merged[["cwe_code", "cvss", "access_complexity", "access_authentication", "vulnerable_product", "vendor"]]
     
+    corr_matrix = df_merged.corr(numeric_only=True)  # Only numeric columns
+
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", center=0)
+    plt.title("Correlation Matrix")
+    plt.savefig("plot.png", bbox_inches='tight')
+    plt.tight_layout()
+    plt.show()
+
     return X, Y, df_merged
 
 def predict_access_vector(knn_model, df, input_sample, label_encoder=None):

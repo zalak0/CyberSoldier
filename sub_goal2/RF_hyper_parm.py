@@ -163,7 +163,6 @@ ax.set_xticks(x)
 ax.set_xticklabels(targets)
 ax.set_ylim(0.9, 1)
 ax.legend()
-ax.grid(True, axis='y', linestyle='--', alpha=0.7)
 
 for bar in bars1 + bars2:
     height = bar.get_height()
