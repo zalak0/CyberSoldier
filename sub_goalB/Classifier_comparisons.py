@@ -50,6 +50,7 @@ def file_initialise(csv_file):
     #Y=df_merged["impact_integrity"]
     X = df_merged[["cwe_code", "cvss", "access_complexity", "access_authentication", "vulnerable_product", "vendor"]]
     
+    # Correlation Matrix (Pre-Processing)
     corr_matrix = df_merged.corr(numeric_only=True)  # Only numeric columns
 
     plt.figure(figsize=(12, 8))

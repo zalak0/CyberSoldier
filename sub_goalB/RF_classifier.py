@@ -142,6 +142,7 @@ def forest_classifier(csv_file, target):
     forest.fit(X_train, Y_train)
     Y_pred = forest.predict(X_test)  
     
+    # Feature Importance graph
     importances = pd.Series(forest.feature_importances_, index=X_train.columns)
     importances.sort_values(ascending=False).plot(kind='barh', figsize=(8, 5))
     plt.title("Feature Importance (Random Forest)")
@@ -151,6 +152,7 @@ def forest_classifier(csv_file, target):
     plt.tight_layout()
     plt.show()
 
+    # PCA graph to show data clusters and data separability
     X_scaled = StandardScaler().fit_transform(X)
     X_pca = PCA(n_components=2).fit_transform(X_scaled)
     
