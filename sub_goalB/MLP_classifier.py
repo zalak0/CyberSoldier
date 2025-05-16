@@ -1,9 +1,9 @@
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import classification_report
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler, normalize
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout
 from tensorflow.keras.optimizers import Adam
@@ -118,16 +118,12 @@ Y_train_enc = to_categorical(le.fit_transform(Y_train))
 Y_val_enc   = to_categorical(le.transform(Y_val))
 Y_test_enc  = to_categorical(le.transform(Y_test))
 
-print(X_train_scaled)      # Should be float32 or float64
-print(Y_val_enc)      # Should be float32 or float64
-
-
 # Build model
 model = Sequential()
 model.add(Input(shape=(X_train_scaled.shape[1],)))
 model.add(Dense(100, activation='relu'))
 model.add(BatchNormalization())     # <- BatchNorm
-model.add(Dropout(0.3))             # Optional: to further prevent overfitting
+model.add(Dropout(0.2))             # Optional: to further prevent overfitting
 model.add(Dense(Y_val_enc.shape[1], activation='softmax'))
 
 # Compile
@@ -150,9 +146,15 @@ train_loss, train_acc = model.evaluate(X_train_scaled, Y_train_enc)
 val_loss, val_acc     = model.evaluate(X_val_scaled, Y_val_enc)
 test_loss, test_acc   = model.evaluate(X_test_scaled, Y_test_enc)
 
+val_losses = []
+train_losses = []
+
+train_losses.append(train_loss)
+val_losses.append(val_loss)
+
+
 print(f"Train Accuracy: {train_acc:.4f}")
 print(f"Val Accuracy:   {val_acc:.4f}")
-print(f"Test Accuracy:  {test_acc:.4f}")
 
 # Plot learning curves
 import matplotlib.pyplot as plt
@@ -161,5 +163,14 @@ plt.plot(history.history['val_accuracy'], label='Val Acc')
 plt.title("Training and Validation Accuracy")
 plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
+plt.legend()
+plt.show()
+
+# Plot loss curves over epochs
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.title("Training and Validation Loss")
 plt.legend()
 plt.show()
