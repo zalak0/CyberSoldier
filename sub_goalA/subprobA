@@ -1,13 +1,18 @@
 import pandas as pd
 df = pd.read_csv('cybersecurity_attacks.csv')
-df.head()
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+from xgboost import XGBClassifier
 
-
-# Drop irrelevant or high-cardinality columns
+#-----------
+# clean
 drop_cols = [
     'Timestamp', 'Source IP Address', 'Destination IP Address',
     'Payload Data', 'Attack Signature', 'User Information',
@@ -15,7 +20,6 @@ drop_cols = [
     'Firewall Logs', 'IDS/IPS Alerts', 'Log Source'
 ]
 
-# Define features and targets
 features = df.drop(columns=drop_cols + ['Anomaly Scores', 'Traffic Type'])
 target_anomaly_type = df['Anomaly Scores']
 target_traffic_type = df['Traffic Type']
@@ -42,7 +46,8 @@ y_traffic = traffic_type_encoder.fit_transform(target_traffic_type)
 # Train/test split
 X_train, X_test, y_attack_train, y_attack_test, y_traffic_train, y_traffic_test = train_test_split(
     features, y_attack, y_traffic, test_size=0.2, random_state=42
-)
+
+#------------ not finished, set up mlp using torch
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -74,3 +79,51 @@ mlp = MLP(input_size=10, hidden_sizes=[64, 32], output_size=1)
 
 # Print model
 print(mlp)
+#----------------
+#logistic regression 
+
+features = df[['Traffic Type', 'Anomaly Scores']]
+target = df['Severity Level']
+features_encoded = pd.get_dummies(features, columns=['Traffic Type'], drop_first=True)
+label_encoder = LabelEncoder()
+target_encoded = label_encoder.fit_transform(target)
+X_train, X_test, y_train, y_test = train_test_split(features_encoded, target_encoded, test_size=0.2, random_state=42)
+
+logreg = LogisticRegression(max_iter=200, class_weight='balanced')
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+print(classification_report(y_test, y_pred, target_names=label_encoder.classes_))
+
+# struggles to predict low, accuracy is not great
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+
+#confusion matrix
+cm = confusion_matrix(y_test, y_pred)
+
+# Display with labels
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=label_encoder.classes_)
+disp.plot(cmap='Blues', xticks_rotation=45)
+plt.title("Confusion Matrix: Severity Level Prediction")
+plt.show()
+#not ideal----------------
+#gaussian naivebayes
+
+nb_model = GaussianNB()
+nb_model.fit(X_train, y_train)
+y_pred_nb = nb_model.predict(X_test)
+print(classification_report(y_test, y_pred_nb, target_names=label_encoder.classes_))
+cm = confusion_matrix(y_test, y_pred_nb)
+
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=label_encoder.classes_)
+disp.plot(cmap='Purples', xticks_rotation=45)
+plt.title("Naive Bayes Confusion Matrix")
+plt.show()
+#---------
+#gradient boosting
+xgb = XGBClassifier(use_label_encoder=False, eval_metric='mlogloss')
+xgb.fit(X_train, y_train)
+
+y_pred = xgb.predict(X_test)
+print(classification_report(y_test, y_pred, target_names=label_encoder.classes_))
