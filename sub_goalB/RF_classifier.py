@@ -1,16 +1,12 @@
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import LabelEncoder
 from sklearn.base import BaseEstimator
-from sklearn.model_selection import GridSearchCV
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 
 def file_initialise(csv_file : str, target : str) -> tuple[float]:
     """ Opens files and initialises data-frame by encoding categorical features and initialising expected input and output
@@ -131,17 +127,7 @@ def print_prediction(predictions: list, targets: list, input_conversion: list):
         target_name = target.replace('impact_', '').capitalize()
         print(f"{target_name:<20}: {prediction} risk")
 
-
-def forest_classifier(csv_file, target):
-    X, Y, df, le_comp, le_auth, le_prod, le_vend = file_initialise(csv_file, target)
-
-    X_train, X_test, Y_train, Y_test = \
-        train_test_split(X, Y, test_size = 0.2)
-
-    forest = RandomForestClassifier()
-    forest.fit(X_train, Y_train)
-    Y_pred = forest.predict(X_test)  
-    
+def graph_importance(X_train):
     # Feature Importance graph
     importances = pd.Series(forest.feature_importances_, index=X_train.columns)
     importances.sort_values(ascending=False).plot(kind='barh', figsize=(8, 5))
@@ -151,24 +137,22 @@ def forest_classifier(csv_file, target):
     plt.xlim(0, 0.7)
     plt.tight_layout()
     plt.show()
-
-    # PCA graph to show data clusters and data separability
-    X_scaled = StandardScaler().fit_transform(X)
-    X_pca = PCA(n_components=2).fit_transform(X_scaled)
     
-    le = LabelEncoder()
-    Y_encoded = le.fit_transform(Y)
 
-    plt.scatter(X_pca[:,0], X_pca[:,1], c=Y_encoded, cmap='viridis', alpha=0.5)
-    plt.title("PCA Visualization Colored by Target")
-    plt.colorbar(label="Encoded Target")
+def forest_classifier(csv_file, target):
+    X, Y, df, le_comp, le_auth, le_prod, le_vend = file_initialise(csv_file, target)
 
-    # Example using 3 classes
-    labels = le.classes_  # ['COMPLETE', 'INCOMPLETE', 'PENDING']
-    colors = plt.cm.viridis([0, 0.5, 1])
-    handles = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(labels))]
-    plt.legend(handles=handles)
-    plt.show()
+    # First: split 60% training, 40% temporary (to become val and test)
+    X_train, X_temp, Y_train, Y_temp = train_test_split(X, Y, train_size=0.6, random_state=42)
+
+    # Then: split the 40% temporary into 50/50 (i.e., 20% val, 20% test)
+    X_val, X_test, Y_val, Y_test = train_test_split(X_temp, Y_temp, test_size=0.5, random_state=42)
+    
+    forest = RandomForestClassifier()
+    forest.fit(X_train, Y_train)
+    Y_pred = forest.predict(X_test)  
+
+    graph_importance(X_train)
     
     print(f"\nClassification Report for {target}:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     

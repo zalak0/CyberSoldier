@@ -1,16 +1,94 @@
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 from sklearn.preprocessing import LabelEncoder
+from sklearn.decomposition import PCA
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+
+def plot_pca(X, Y):
+    # PCA graph to show data clusters and data separability
+    X_scaled = StandardScaler().fit_transform(X)
+    X_pca = PCA(n_components=2).fit_transform(X_scaled)
+    
+    le = LabelEncoder()
+    Y_encoded = le.fit_transform(Y)
+
+    plt.scatter(X_pca[:,0], X_pca[:,1], c=Y_encoded, cmap='viridis', alpha=0.5)
+    plt.title("PCA Visualization Colored by Target")
+    plt.colorbar(label="Encoded Target")
+
+    # Example using 3 classes
+    labels = le.classes_  # ['COMPLETE', 'INCOMPLETE', 'PENDING']
+    colors = plt.cm.viridis([0, 0.5, 1])
+    handles = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(labels))]
+    plt.legend(handles=handles)
+    plt.show()
+    
+def plot_corr_matrix(df):
+    # Correlation Matrix (Pre-Processing)
+    corr_matrix = df.corr(numeric_only=True)  # Only numeric columns
+
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", center=0)
+    plt.title("Correlation Matrix")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_class_comp(X_train, X_test, Y_train, Y_test):
+    # acc_knn, f1_kn = knn_classifier(X_train, X_test, Y_train, Y_test)
+    # acc_mlp, f1_mlp = mlp_classifier(X_train, X_test, Y_train, Y_test)
+    # acc_gb, f1_gb = gboost_classifier(X_train, X_test, Y_train, Y_test)
+    # acc_frst, f1_frst = forest_classifier(X_train, X_test, Y_train, Y_test)
+    acc_log_reg, f1_log_reg = log_reg_classifier(X_train, X_test, Y_train, Y_test)
+    acc_svm, f1_svm = svm_classifier(X_train, X_test, Y_train, Y_test)
+    # predict_access_vector(forest, df, [79, 5, 1, 1, 1, 4])
+
+    # Classifier names
+    models = ['KNN', 'MLP', 'GBoost', 'Random Forest', 'Logistic Regression', 'SVM']
+
+    # Accuracy and F1-score values
+    # accuracy = [acc_knn, acc_mlp, acc_gb, acc_frst, acc_log_reg, acc_svm]
+    # f1_score = [f1_kn, f1_mlp, f1_gb, f1_frst, f1_log_reg, f1_svm]
+
+    accuracy = [acc_log_reg, acc_svm]
+    f1_score = [f1_log_reg, f1_svm]
+    
+    # Set position of bar on X axis
+    x = np.arange(len(models))
+    width = 0.35  # Width of the bars
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars1 = ax.bar(x - width/2, accuracy, width, label='Accuracy', color='skyblue')
+    bars2 = ax.bar(x + width/2, f1_score, width, label='F1 Score', color='salmon')
+
+    # Labels and title
+    ax.set_ylabel('Score')
+    ax.set_title('Classifier Accuracy and F1 Score Performance')
+    ax.set_xticks(x)
+    ax.set_xticklabels(models)
+    ax.set_ylim(0.5, 1.05)
+    ax.legend()
+
+    # Annotate bars
+    for bar in bars1 + bars2:
+        yval = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f'{yval:.4f}', ha='center', va='bottom')
+
+    plt.tight_layout()
+    plt.show()
 
 def file_initialise(csv_file): 
     df = pd.read_csv(csv_file)
@@ -50,59 +128,15 @@ def file_initialise(csv_file):
     #Y=df_merged["impact_integrity"]
     X = df_merged[["cwe_code", "cvss", "access_complexity", "access_authentication", "vulnerable_product", "vendor"]]
     
-    # Correlation Matrix (Pre-Processing)
-    corr_matrix = df_merged.corr(numeric_only=True)  # Only numeric columns
-
-    plt.figure(figsize=(12, 8))
-    sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", center=0)
-    plt.title("Correlation Matrix")
-    plt.savefig("plot.png", bbox_inches='tight')
-    plt.tight_layout()
-    plt.show()
+    plot_corr_matrix(df_merged)
+    
+    plot_pca(X, Y)
 
     return X, Y, df_merged
 
-def predict_access_vector(knn_model, df, input_sample, label_encoder=None):
-    """
-    Predicts the access_vector for a single input sample using a trained KNN model.
-
-    Parameters:
-    - knn_model: trained KNeighborsClassifier model
-    - input_sample: list or array of input features (same order as training data)
-    - label_encoder: optional, to inverse-transform encoded labels if needed
-
-    Returns:
-    - predicted class (str or int depending on label encoder)
-    """
-    
-    df_mapped = df[['cwe_code', 'cwe_name']].drop_duplicates()  # Remove duplicate cwe_code/cwe_name pairs
-    df_with_names = pd.merge(df, df_mapped, on='cwe_code', how='left', suffixes=('', '_mapped'))
-    
-    if input_sample[0] in df['cwe_code'].values:
-        cwe_name = df.loc[df['cwe_code'] == input_sample[0], 'cwe_name'].iloc[0]
-        vendor = df.loc[df['cwe_code'] == input_sample[0], 'vendor'].iloc[0]
-        acc_comp = df.loc[df['cwe_code'] == input_sample[0], 'access_complexity'].iloc[0]
-        acc_auth = df.loc[df['cwe_code'] == input_sample[0], 'vendor'].iloc[0]
-        
-
-    # Reshape input to match expected shape: (1, n_features)
-    input_array = np.array(input_sample).reshape(1, -1)
-
-    # Make prediction
-    prediction = knn_model.predict(input_array)
-    
-    #print(f"A vulnerability of {cwe_name} which has a vulnerability score of {input_sample[1]} from a {vendor} vendor, will result in a {prediction[0]} risk on data confidentiality")
-    print(f"A vulnerability of {cwe_name} which has a vulnerability score of {input_sample[1]} from a {vendor} vendor, will result in a {prediction[0]} risk to system availability")
-    #print(f"A vulnerability of {cwe_name} which has a vulnerability score of {input_sample[1]} from a {vendor} vendor, will result in a {prediction[0]} risk to data integrity")
-
-
-def knn_classifier(csv_file):
-    X, Y, df = file_initialise(csv_file)
-    
-    X_train, X_test, Y_train, Y_test = \
-        train_test_split(X, Y, test_size = 0.2)
-
+def knn_classifier(X_train, X_test, Y_train, Y_test):
     knn = KNeighborsClassifier(n_neighbors=5, weights = "distance")
+    
     knn.fit(X_train, Y_train)
     Y_pred = knn.predict(X_test)
     acc = accuracy_score(Y_test, Y_pred)
@@ -111,19 +145,13 @@ def knn_classifier(csv_file):
     
     print("\nClassification Report using KNN:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return knn, df, acc, f1
+    return acc, f1
 
 
-def mlp_classifier(csv_file):
-    X, Y, df = file_initialise(csv_file)
-    
-    X_train, X_test, Y_train, Y_test = \
-        train_test_split(X, Y, test_size = 0.2)
-
+def mlp_classifier(X_train, X_test, Y_train, Y_test):
     pipeline = Pipeline([
     ('scaler', StandardScaler()),
     ('mlp', MLPClassifier(hidden_layer_sizes=(100,),
-                    alpha=0.01,     # Increase this to apply stronger regularisation
                     max_iter=300,
                     random_state=42)
 )
@@ -135,31 +163,22 @@ def mlp_classifier(csv_file):
     
     print("\nClassification Report using MLP: \n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return pipeline, df, acc, f1
+    return acc, f1
 
 
-def gboost_classifier(csv_file):
-    X, Y, df = file_initialise(csv_file)
-
-    X_train, X_test, Y_train, Y_test = \
-        train_test_split(X, Y, test_size = 0.2)
-
-    xgboost = GradientBoostingClassifier()
-    xgboost.fit(X_train, Y_train)
-    Y_pred = xgboost.predict(X_test)  
+def gboost_classifier(X_train, X_test, Y_train, Y_test):
+    gboost = GradientBoostingClassifier()
+    gboost.fit(X_train, Y_train)
+    Y_pred = gboost.predict(X_test)  
     acc = accuracy_score(Y_test, Y_pred)
     f1 = f1_score(Y_test, Y_pred, average='weighted')
 
     
     print("\nClassification Report using Gradient Boost:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return xgboost, df, acc, f1
+    return acc, f1
 
-def forest_classifier(csv_file):
-    X, Y, df = file_initialise(csv_file)
-
-    X_train, X_test, Y_train, Y_test = \
-        train_test_split(X, Y, test_size = 0.2)
+def forest_classifier(X_train, X_test, Y_train, Y_test):
 
     forest = RandomForestClassifier()
     forest.fit(X_train, Y_train)
@@ -172,74 +191,54 @@ def forest_classifier(csv_file):
     
     print("\nClassification Report for Random Forest:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    return forest, df, acc, f1
+    return acc, f1
 
+def log_reg_classifier(X_train, X_test, Y_train, Y_test):
+    log_reg = LogisticRegression(max_iter= 100000)
 
-def ens_classifier(csv_file):
-    X, Y, df = file_initialise(csv_file)
-
-    X_train, X_test, Y_train, Y_test = \
-        train_test_split(X, Y, test_size = 0.2)
-        
-    # Example models
-    knn = KNeighborsClassifier(n_neighbors=5)
-    mlp = MLPClassifier(hidden_layer_sizes=(100,), max_iter=300)
-    gbc = GradientBoostingClassifier()
-
-    # Voting ensemble (can use 'hard' or 'soft' voting)
-    ensemble = VotingClassifier(
-        estimators=[('knn', knn), ('mlp', mlp), ('gbc', gbc)],
-        voting='soft'  # 'soft' works better if all classifiers provide predict_proba
-    )
-
-    # Fit and evaluate
-    ensemble.fit(X_train, Y_train)
-    Y_pred = ensemble.predict(X_test)
+    log_reg.fit(X_train, Y_train)
+    Y_pred = log_reg.predict(X_test)
     acc = accuracy_score(Y_test, Y_pred)
     f1 = f1_score(Y_test, Y_pred, average='weighted')
 
+    print("\nClassification Report for Logistic Regression:\n", \
+        classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
-    print("\nClassification Report for CWE Code:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
+    return acc, f1
+
+def svm_classifier(X_train, X_test, Y_train, Y_test):
+
+    svm = SVC()
+
+    scaler = StandardScaler()
+    # 2. Scale entire data (fit only on training set!)
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled  = scaler.transform(X_test)
+
+    # 3. Encode labels (once)
+    le = LabelEncoder()
+    Y_train_enc = le.fit_transform(Y_train)
+    Y_test_enc  = le.transform(Y_test)
+
+    # Fit and evaluate
+    svm.fit(X_train_scaled, Y_train_enc)
+    Y_pred = svm.predict(X_test_scaled)
+    acc = accuracy_score(Y_test_enc, Y_pred)
+    f1 = f1_score(Y_test_enc, Y_pred, average='weighted')
+
     
-    return ensemble, df, acc, f1
+    print("\nClassification Report for CWE Code:\n", classification_report(Y_test_enc, Y_pred, digits=4, zero_division=0))
+    
+    return acc, f1
 
-warnings.filterwarnings("ignore")
-knn, df, acc_knn, f1_kn = knn_classifier("data/cleaned_cve.csv")
-mlp, df, acc_mlp, f1_mlp = mlp_classifier("data/cleaned_cve.csv")
-gboost, df, acc_gb, f1_gb = gboost_classifier("data/cleaned_cve.csv")
-forest, df, acc_frst, f1_frst = forest_classifier("data/cleaned_cve.csv")
-ensemble, df, acc_ens, f1_ens = ens_classifier("data/cleaned_cve.csv")
-predict_access_vector(forest, df, [79, 5, 1, 1, 1, 4])
 
-# Classifier names
-models = ['KNN', 'MLP', 'GBoost', 'Random Forest', 'Ensemble']
+X, Y, df = file_initialise("data/cleaned_cve.csv")
 
-# Accuracy and F1-score values
-accuracy = [acc_knn, acc_mlp, acc_gb, acc_frst, acc_ens]
-f1_score = [f1_kn, f1_mlp, f1_gb, f1_frst, f1_ens]
+X_train, X_temp, Y_train, Y_temp = \
+    train_test_split(X, Y, train_size = 0.6)
 
-# Set position of bar on X axis
-x = np.arange(len(models))
-width = 0.35  # Width of the bars
+X_val, X_test, Y_val, Y_test = train_test_split(X, Y, train_size = 0.5)
 
-# Plotting
-fig, ax = plt.subplots(figsize=(10, 6))
-bars1 = ax.bar(x - width/2, accuracy, width, label='Accuracy', color='skyblue')
-bars2 = ax.bar(x + width/2, f1_score, width, label='F1 Score', color='salmon')
-
-# Labels and title
-ax.set_ylabel('Score')
-ax.set_title('Classifier Accuracy and F1 Score Performance')
-ax.set_xticks(x)
-ax.set_xticklabels(models)
-ax.set_ylim(0.7, 1)
-ax.legend()
-
-# Annotate bars
-for bar in bars1 + bars2:
-    yval = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f'{yval:.4f}', ha='center', va='bottom')
-
-plt.tight_layout()
-plt.show()
+plot_class_comp(X_train, X_test, Y_train, Y_test)
 

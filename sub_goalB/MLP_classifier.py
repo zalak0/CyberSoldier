@@ -68,7 +68,7 @@ pipeline = Pipeline([
     ('scaler', StandardScaler()),
     ('mlp', MLPClassifier(hidden_layer_sizes=(100,),
                 alpha=0.01,     # Increase this to apply stronger regularisation
-                max_iter=300,
+                max_iter=1000,
                 random_state=42))
     ])
 
