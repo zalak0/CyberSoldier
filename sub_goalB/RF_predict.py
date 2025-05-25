@@ -127,7 +127,7 @@ def print_prediction(predictions: list, targets: list, input_conversion: list):
         target_name = target.replace('impact_', '').capitalize()
         print(f"{target_name:<20}: {prediction} risk")
 
-def graph_importance(X_train):
+def graph_importance(forest, X_train):
     # Feature Importance graph
     importances = pd.Series(forest.feature_importances_, index=X_train.columns)
     importances.sort_values(ascending=False).plot(kind='barh', figsize=(8, 5))
@@ -152,7 +152,7 @@ def forest_classifier(csv_file, target):
     forest.fit(X_train, Y_train)
     Y_pred = forest.predict(X_test)  
 
-    graph_importance(X_train)
+    graph_importance(forest, X_train)
     
     print(f"\nClassification Report for {target}:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
     
