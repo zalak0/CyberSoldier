@@ -3,6 +3,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
 from sklearn.base import BaseEstimator
+import seaborn as sns
 import warnings
 import pandas as pd
 import numpy as np
