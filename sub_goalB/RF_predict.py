@@ -2,11 +2,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
-from sklearn.base import BaseEstimator
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import warnings
 import pandas as pd
 import numpy as np
+import shap
 import matplotlib.pyplot as plt
 
 def file_initialise(csv_file : str, target : str) -> tuple[float]:
@@ -63,58 +65,94 @@ def file_initialise(csv_file : str, target : str) -> tuple[float]:
     #Y=df_merged["impact_integrity"]
     X = df_merged[["cwe_code", "cvss", "access_complexity", "access_authentication", "vulnerable_product", "vendor"]]
     
+    print(X)
     return X, Y, df_merged, le_comp, le_auth, le_prod, le_vend
 
-def predict_access_vector(model : BaseEstimator, df : pd.DataFrame, input_sample : list, target : str, le_comp : LabelEncoder, 
-                          le_auth : LabelEncoder, le_prod : LabelEncoder, le_vend : LabelEncoder):
-    """
-    Predicts the risk impact level of a vulnerability on a specified target based on input features.
+def multioutput_forest_classifier(csv_file, targets):
+    # Load data
+    X, _, df, le_comp, le_auth, le_prod, le_vend = file_initialise(csv_file, targets[0])
+    
+    le_target = LabelEncoder()
+    # Encode all target labels
+    Y = df[targets].apply(le_target.fit_transform)  # You can keep a list of encoders if needed
 
-    Args:
-        model (sklearn.base.BaseEstimator): A trained classification model that predicts the risk level.
-        df (pd.DataFrame): The main dataset containing vulnerability information, including CWE codes and names.
-        input_sample (list or array-like): A list containing input features in the following order:
-            [cwe_code (int), cvss_score (float), access_complexity (int), authentication (int), product (int), vendor (int)].
-        target (str): The impact target to assess (e.g., 'impact_confidentiality', 'impact_integrity').
-        le_comp (sklearn.preprocessing.LabelEncoder): LabelEncoder used to encode access complexity.
-        le_auth (sklearn.preprocessing.LabelEncoder): LabelEncoder used to encode authentication.
-        le_prod (sklearn.preprocessing.LabelEncoder): LabelEncoder used to encode the product.
-        le_vend (sklearn.preprocessing.LabelEncoder): LabelEncoder used to encode the vendor.
+    # Split the data
+    X_train, X_temp, Y_train, Y_temp = train_test_split(X, Y, train_size=0.6, random_state=42)
+    X_val, X_test, Y_val, Y_test = train_test_split(X_temp, Y_temp, test_size=0.5, random_state=42)
 
-    Returns:
-        tuple:
-            - prediction (str): The predicted risk level (e.g., 'Low', 'Medium', 'High').
-            - input_conversion (list): A human-readable version of the input features for interpretation.
-    """
-    target_name = target.replace('impact_', '')
-    df_mapped = df[['cwe_code', 'cwe_name']].drop_duplicates()  # Remove duplicate cwe_code/cwe_name pairs
-    df_with_names = pd.merge(df, df_mapped, on='cwe_code', how='left', suffixes=('', '_mapped'))
+    # Define and train the multi-output classifier
+    base_clf = RandomForestClassifier(n_estimators =  200, 
+                                      min_samples_split = 5, 
+                                      min_samples_leaf = 1, 
+                                      max_features = 'log2', 
+                                      max_depth = 20
+                                      )
+    clf = MultiOutputClassifier(base_clf)
+    clf.fit(X_train, Y_train)
+
+    # Evaluate
+    Y_pred = clf.predict(X_test)
+    Y_pred_df = pd.DataFrame(Y_pred, columns=targets)
+
+    for idx, target in enumerate(targets):
+        print(f"\n=== Classification Report for {target} ===")
+        print(classification_report(Y_test[target], Y_pred_df[target], digits = 4))
+        print(confusion_matrix(Y_test[target], Y_pred_df[target]))
+
+    return clf, X_train, X_test, Y_test, df, le_comp, le_auth, le_prod, le_vend, le_target
+
+def forest_classifier(csv_file, target):
+    X, Y, df, le_comp, le_auth, le_prod, le_vend = file_initialise(csv_file, target)
+
+    # Encode target if it's categorical
+    le_target = LabelEncoder()
+    Y_encoded = le_target.fit_transform(Y)
+
+    # Split the data
+    X_train, X_temp, Y_train, Y_temp = train_test_split(X, Y_encoded, train_size=0.6, random_state=42)
+    X_val, X_test, Y_val, Y_test = train_test_split(X_temp, Y_temp, test_size=0.5, random_state=42)
+
+    # Train model
+    clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    clf.fit(X_train, Y_train)
+
+    # Evaluate
+    Y_pred = clf.predict(X_test)
+    print(classification_report(Y_test, Y_pred, target_names=le_target.classes_))
+    print(confusion_matrix(Y_test, Y_pred))
+
+    # Graphs
+    # graph_importance(clf, X_train)
+    # plot_shap(clf, X_train)
+
+    return clf, le_target, X_train, X_test, Y_test, df, le_comp, le_auth, le_prod, le_vend
+
+
+def predict_multioutput(model, input_sample):
+    prediction_idxs = model.predict(np.array(input_sample).reshape(1, -1))[0]  # One sample, multiple outputs
+    
+    pred_new = le_target.inverse_transform(prediction_idxs)
+    
+    # Decode input features
     cwe_name = df.loc[df['cwe_code'] == input_sample[0], 'cwe_name'].iloc[0] if input_sample[0] in df['cwe_code'].values else "Unknown CWE"
     access_comp = le_comp.inverse_transform([input_sample[2]])[0]
     access_auth = le_auth.inverse_transform([input_sample[3]])[0]
     product = le_prod.inverse_transform([input_sample[4]])[0]
     vendor = le_vend.inverse_transform([input_sample[5]])[0]
-    prediction = model.predict(np.array(input_sample).reshape(1, -1))[0]
-    
+
     input_conversion = [cwe_name, input_sample[1], access_comp, access_auth, product, vendor]
-        
-    # print(
-    #     f"The vulnerability '{cwe_name}' affecting the product '{product}' from vendor '{vendor}'"
-    #     f"with a CVSS score of {input_sample[1]}, which has '{access_comp}' access complexity and '{access_auth}' authentication,"
-    #     f"is predicted to pose a '{prediction}' risk to {target_name}.")
-    
-    return prediction, input_conversion
+    return pred_new, input_conversion  # Return list of predictions
+
 
 def print_prediction(predictions: list, targets: list, input_conversion: list):
     """
     Prints the predictions in a human-readable format after classification.
-
     Args:
         predictions (list): List of predictions for the output features in order.
         targets (list): List of target feature names that the model is predicting.
         input_conversion (list): Human-readable version of the input features.
     """
-    
+
     print("=== Input Features ===")
     print(f"Vulnerability           : {input_conversion[0]}")
     print(f"CVSS Score              : {input_conversion[1]}")
@@ -124,9 +162,9 @@ def print_prediction(predictions: list, targets: list, input_conversion: list):
     print(f"Vendor                  : {input_conversion[5]}")
     
     print("\n=== Predicted Risk Impacts ===")
-    for target, prediction in zip(targets, predictions):
-        target_name = target.replace('impact_', '').capitalize()
-        print(f"{target_name:<20}: {prediction} risk")
+    for i in range(len(predictions[0])):
+        target_name = targets[i].replace('impact_', '').capitalize()
+        print(f"{target_name:<20}: {predictions[0][i]} risk")
 
 def graph_importance(forest, X_train):
     # Feature Importance graph
@@ -138,36 +176,54 @@ def graph_importance(forest, X_train):
     plt.xlim(0, 0.7)
     plt.tight_layout()
     plt.show()
-    
 
-def forest_classifier(csv_file, target):
-    X, Y, df, le_comp, le_auth, le_prod, le_vend = file_initialise(csv_file, target)
+def plot_shap(model, X_train):
+    # Your existing code for data preparation
+    print("Shape of X_train:", X_train.shape)
+    print("Columns in X_train:", X_train.columns.tolist())
 
-    # First: split 60% training, 40% temporary (to become val and test)
-    X_train, X_temp, Y_train, Y_temp = train_test_split(X, Y, train_size=0.6, random_state=42)
+    if type(X_train) == pd.DataFrame:
+        print("Yes is DataFrame")
 
-    # Then: split the 40% temporary into 50/50 (i.e., 20% val, 20% test)
-    X_val, X_test, Y_val, Y_test = train_test_split(X_temp, Y_temp, test_size=0.5, random_state=42)
-    
-    forest = RandomForestClassifier()
-    forest.fit(X_train, Y_train)
-    Y_pred = forest.predict(X_test)  
+    # Create TreeExplainer for your model
+    explainer = shap.TreeExplainer(model)
+    X_sample = X_train.sample(1000, random_state=42)
 
-    graph_importance(forest, X_train)
-    
-    print(f"\nClassification Report for {target}:\n", classification_report(Y_test, Y_pred, digits=4, zero_division=0))
-    
-    return forest, df, le_comp, le_auth, le_prod, le_vend
+    print("Shape of X_sample:", X_sample.shape)
+    print("Columns in X_sample:", X_sample.columns.tolist())
 
-warnings.filterwarnings("ignore")
-targets = ["impact_confidentiality", "impact_availability", "impact_integrity"]
-predictions = []
-for target in targets:
-    forest, df_merged, le_comp, le_auth, le_prod, le_vend = forest_classifier("data/cleaned_cve.csv", target)
+    # Calculate SHAP values
+    shap_values = explainer.shap_values(X_sample)
 
-    # Input sample structure ["cwe_code", "cvss", "access_complexity", "access_authentication", "vulnerable_product", "vendor"]
-    input_sample = [79, 7, 1, 0, 40, 10]
-    pred, input_conversion = predict_access_vector(forest, df_merged, input_sample, target, le_comp, le_auth, le_prod, le_vend)
-    predictions.append(pred)
+    # Debug information
+    print("SHAP values shape:", shap_values[0, :, 0].shape)
+    print("Expected value:", explainer.expected_value)
 
-print_prediction(predictions, targets, input_conversion)
+    # Initialize SHAP JS visualizations
+    shap.initjs()
+
+    # Fix 1: Force plot for binary classification
+    # For binary classification, use class 1 (positive class) SHAP values
+    shap.force_plot(
+        explainer.expected_value[1], 
+        shap_values[0, :, 0],  # First sample, all features, class 1
+        X_sample.iloc[0]
+    )
+
+    # Fix 2: Summary plot for binary classification
+    # Use only the positive class SHAP values
+    shap.summary_plot(shap_values[:, :, 0], X_sample)
+
+    # Fix 3: Dependence plot for binary classification  
+    shap.dependence_plot(
+        "cvss", 
+        shap_values[:, :, 0],  # All samples, all features, class 1
+        X_sample
+)
+targets = ["impact_confidentiality", "impact_integrity", "impact_availability"]
+
+clf, X_train, X_test, Y_test, df, le_comp, le_auth, le_prod, le_vend, le_target = \
+    multioutput_forest_classifier("data/cleaned_cve.csv", targets)
+input_sample = [79, 7, 1, 0, 4, 2]
+prediction, input_conv= predict_multioutput(clf, input_sample)
+print_prediction([prediction], targets, input_conv)

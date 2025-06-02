@@ -45,12 +45,11 @@ def plot_corr_matrix(df):
     plt.tight_layout()
     plt.show()
 
-
 def plot_class_comp(X_train, X_test, Y_train, Y_test):
-    # acc_knn, f1_kn = knn_classifier(X_train, X_test, Y_train, Y_test)
-    # acc_mlp, f1_mlp = mlp_classifier(X_train, X_test, Y_train, Y_test)
-    # acc_gb, f1_gb = gboost_classifier(X_train, X_test, Y_train, Y_test)
-    # acc_frst, f1_frst = forest_classifier(X_train, X_test, Y_train, Y_test)
+    acc_knn, f1_kn = knn_classifier(X_train, X_test, Y_train, Y_test)
+    acc_mlp, f1_mlp = mlp_classifier(X_train, X_test, Y_train, Y_test)
+    acc_gb, f1_gb = gboost_classifier(X_train, X_test, Y_train, Y_test)
+    acc_frst, f1_frst = forest_classifier(X_train, X_test, Y_train, Y_test)
     acc_log_reg, f1_log_reg = log_reg_classifier(X_train, X_test, Y_train, Y_test)
     acc_svm, f1_svm = svm_classifier(X_train, X_test, Y_train, Y_test)
     # predict_access_vector(forest, df, [79, 5, 1, 1, 1, 4])
@@ -59,11 +58,11 @@ def plot_class_comp(X_train, X_test, Y_train, Y_test):
     models = ['KNN', 'MLP', 'GBoost', 'Random Forest', 'Logistic Regression', 'SVM']
 
     # Accuracy and F1-score values
-    # accuracy = [acc_knn, acc_mlp, acc_gb, acc_frst, acc_log_reg, acc_svm]
-    # f1_score = [f1_kn, f1_mlp, f1_gb, f1_frst, f1_log_reg, f1_svm]
+    accuracy = [acc_knn, acc_mlp, acc_gb, acc_frst, acc_log_reg, acc_svm]
+    f1_score = [f1_kn, f1_mlp, f1_gb, f1_frst, f1_log_reg, f1_svm]
 
-    accuracy = [acc_log_reg, acc_svm]
-    f1_score = [f1_log_reg, f1_svm]
+    # accuracy = [acc_log_reg, acc_svm]
+    # f1_score = [f1_log_reg, f1_svm]
     
     # Set position of bar on X axis
     x = np.arange(len(models))
@@ -152,7 +151,7 @@ def mlp_classifier(X_train, X_test, Y_train, Y_test):
     pipeline = Pipeline([
     ('scaler', StandardScaler()),
     ('mlp', MLPClassifier(hidden_layer_sizes=(100,),
-                    max_iter=300,
+                    max_iter=500,
                     random_state=42)
 )
     ])
@@ -194,7 +193,7 @@ def forest_classifier(X_train, X_test, Y_train, Y_test):
     return acc, f1
 
 def log_reg_classifier(X_train, X_test, Y_train, Y_test):
-    log_reg = LogisticRegression(max_iter= 100000)
+    log_reg = LogisticRegression(max_iter= 20000)
 
     log_reg.fit(X_train, Y_train)
     Y_pred = log_reg.predict(X_test)
@@ -238,7 +237,7 @@ X, Y, df = file_initialise("data/cleaned_cve.csv")
 X_train, X_temp, Y_train, Y_temp = \
     train_test_split(X, Y, train_size = 0.6)
 
-X_val, X_test, Y_val, Y_test = train_test_split(X, Y, train_size = 0.5)
+X_val, X_test, Y_val, Y_test = train_test_split(X_temp, Y_temp, train_size = 0.5)
 
 plot_class_comp(X_train, X_test, Y_train, Y_test)
 
